@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Menu Order</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--primary:#128c7e;--secondary:#25d366;--light:#f9fafb;--card:#ffffff}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Poppins',sans-serif;background:var(--light)}
+header{background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;padding:18px;text-align:center;font-size:20px;font-weight:600}
+.container{padding:14px;max-width:900px;margin:auto}
+.category{margin-top:20px}
+.category h3{border-left:4px solid var(--primary);padding-left:8px}
+.menu{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px}
+.item{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 6px 16px rgba(0,0,0,.08)}
+.item img{width:100%;height:120px;object-fit:cover}
+.info{padding:10px}
+.qty{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.qty button{background:var(--primary);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:18px}
+.cart{background:#fff;border-radius:14px;padding:14px;margin-top:20px;box-shadow:0 6px 16px rgba(0,0,0,.08)}
+.row{display:flex;justify-content:space-between;font-size:14px;margin:6px 0}
+.total{position:sticky;bottom:0;background:#fff;padding:12px;font-size:18px;font-weight:600;border-top:2px solid #eee}
+.form{background:var(--card);border-radius:18px;padding:18px;margin-top:20px;box-shadow:0 10px 25px rgba(0,0,0,.1)}
+.section-title{font-weight:600;margin:0 0 10px;font-size:16px}
+.input-group{margin-bottom:14px}
+.input-group label{display:block;font-size:13px;color:#555;margin-bottom:4px}
+.input-group input,.input-group textarea{width:100%;padding:12px;border-radius:12px;border:1px solid #ddd;font-size:15px;font-family:'Poppins'}
+.input-group textarea{resize:none}
+.order-type{display:flex;gap:10px;margin-bottom:18px}
+.type-card{flex:1;text-align:center;padding:14px;border-radius:14px;background:#f1f5f9;cursor:pointer;font-weight:500;transition:.2s}
+.type-card.active{background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;box-shadow:0 6px 14px rgba(0,0,0,.2)}
+.error{color:#dc2626;font-size:13px;margin-bottom:10px}
+.send{width:100%;padding:16px;border:none;border-radius:16px;background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;font-size:16px;font-weight:600;opacity:.4}
+.send.enabled{opacity:1}
+.order-id{background:#ecfeff;border:1px dashed var(--primary);padding:10px;border-radius:12px;margin-bottom:14px;font-weight:600;color:#065f46;text-align:center}
+</style>
+</head>
+<body>
+<header>🍽 SFC Menu</header>
+
+<div class="container" id="menu"></div>
+
+<div class="container"><div class="cart" id="cart"><h3>🛒 Your Order</h3></div></div>
+<div class="total" id="total">Total: ₹0</div>
+
+<div class="container">
+  <div class="form">
+    <div id="orderIdBox" class="order-id" style="display:none"></div>
+
+    <div class="section-title">🧾 Order Type</div>
+    <div class="order-type">
+      <div class="type-card active" onclick="setType('Dine In',this)">🍽 Dine In</div>
+      <div class="type-card" onclick="setType('Take Away',this)">🥡 Take Away</div>
+      <div class="type-card" onclick="setType('Delivery',this)">🏠 Delivery</div>
+    </div>
+
+    <div class="section-title">👤 Customer Details</div>
+
+    <div class="input-group">
+      <label>Customer Name</label>
+      <input id="name" placeholder="Enter full name" oninput="validate()">
+    </div>
+
+    <div class="input-group">
+      <label>Mobile Number</label>
+      <input id="mobile" placeholder="10-digit mobile number" oninput="validate()">
+    </div>
+
+    <div class="input-group" id="addressBox" style="display:none">
+      <label>Delivery Address</label>
+      <textarea id="address" rows="3" placeholder="House no, Street, Area" oninput="validate()"></textarea>
+    </div>
+
+    <div id="error" class="error"></div>
+
+    <button id="sendBtn" class="send" disabled onclick="shareOrder()">📲 Share Order on WhatsApp</button>
+  </div>
+</div>
+
+<script>
+const ADMIN_PHONE="919360039283";
+let orderType="Dine In";
+let currentOrderId=null;
+
+// ====== SIMPLE INCREMENT ORDER ID (1,2,3,...) ======
+function getNextOrderId(){
+  let last = localStorage.getItem('lastOrderId');
+  last = last ? parseInt(last,10) : 0;
+  const next = last + 1;
+  localStorage.setItem('lastOrderId', next);
+  return next;
+}
+
+const data={
+  "Fast Food":[
+    {name:"Burger",price:120,img:"https://via.placeholder.com/300x200?text=Burger"},
+    {name:"Pizza",price:250,img:"https://via.placeholder.com/300x200?text=Pizza"}
+  ],
+  "Drinks":[
+    {name:"Coffee",price:60,img:"https://via.placeholder.com/300x200?text=Coffee"},
+    {name:"Cold Drink",price:40,img:"https://via.placeholder.com/300x200?text=Drink"}
+  ]
+};
+
+let cart={};
+
+const menu=document.getElementById('menu');
+const cartDiv=document.getElementById('cart');
+const totalDiv=document.getElementById('total');
+const nameInput=document.getElementById('name');
+const mobileInput=document.getElementById('mobile');
+const addressInput=document.getElementById('address');
+const addressBox=document.getElementById('addressBox');
+const sendBtn=document.getElementById('sendBtn');
+const errorDiv=document.getElementById('error');
+const orderIdBox=document.getElementById('orderIdBox');
+
+for(let cat in data){
+  let html=`<div class='category'><h3>${cat}</h3><div class='menu'>`;
+  data[cat].forEach(i=>{
+    html+=`<div class='item'>
+      <img src='${i.img}'>
+      <div class='info'>
+        <h4>${i.name}</h4>
+        <p>₹${i.price}</p>
+        <div class='qty'>
+          <button onclick=\"updateQty('${i.name}',${i.price},-1)\">−</button>
+          <span id='q-${i.name}'>0</span>
+          <button onclick=\"updateQty('${i.name}',${i.price},1)\">+</button>
+        </div>
+      </div>
+    </div>`;
+  });
+  html+='</div></div>';
+  menu.innerHTML+=html;
+}
+
+function updateQty(name,price,delta){
+  cart[name]=cart[name]||{qty:0,price};
+  cart[name].qty=Math.max(0,cart[name].qty+delta);
+  document.getElementById('q-'+name).innerText=cart[name].qty;
+  render();validate();
+}
+
+function render(){
+  let total=0;cartDiv.innerHTML='<h3>🛒 Your Order</h3>';
+  for(let i in cart){
+    if(cart[i].qty>0){
+      let sum=cart[i].qty*cart[i].price;
+      total+=sum;
+      cartDiv.innerHTML+=`<div class='row'>${i} x ${cart[i].qty}<span>₹${sum}</span></div>`;
+    }
+  }
+  totalDiv.innerText='Total: ₹'+total;
+}
+
+function validate(){
+  errorDiv.innerText='';
+  if(!nameInput.value.trim()) return disable();
+  if(!/^\d{10}$/.test(mobileInput.value.trim())){errorDiv.innerText='Enter valid 10-digit mobile';return disable();}
+  if(orderType==='Delivery' && !addressInput.value.trim()){errorDiv.innerText='Delivery address required';return disable();}
+  if(Object.values(cart).every(i=>i.qty===0)) return disable();
+  enable();
+}
+
+function disable(){sendBtn.disabled=true;sendBtn.classList.remove('enabled')}
+function enable(){sendBtn.disabled=false;sendBtn.classList.add('enabled')}
+
+function setType(type,el){
+  orderType=type;
+  document.querySelectorAll('.type-card').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  if(type==='Delivery'){addressBox.style.display='block'}
+  else{addressBox.style.display='none';addressInput.value=''}
+  validate();
+}
+
+function buildMessage(orderId){
+  let total=0;
+  let msg=`🧾 *ORDER NO: ${orderId}*\nType: ${orderType}\nName: ${nameInput.value}\nMobile: ${mobileInput.value}`;
+  if(orderType==='Delivery') msg+=`\nAddress: ${addressInput.value}`;
+  msg+='\n\n';
+  for(let i in cart){
+    if(cart[i].qty>0){
+      let sum=cart[i].qty*cart[i].price;
+      total+=sum;
+      msg+=`- ${i} x ${cart[i].qty} = ₹${sum}\n`;
+    }
+  }
+  msg+=`\nTotal: ₹${total}`;
+  return msg;
+}
+
+function shareOrder(){
+  if(!currentOrderId){
+    currentOrderId = getNextOrderId();
+    orderIdBox.innerText = 'Order No: ' + currentOrderId;
+    orderIdBox.style.display = 'block';
+  }
+  const text = buildMessage(currentOrderId);
+  window.location.href = `https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent(text)}`;
+}
+</script>
+</body>
+</html>
